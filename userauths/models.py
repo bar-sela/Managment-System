@@ -1,19 +1,31 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.db.models.signals import post_save
+from django.forms import ValidationError
+
+
+#note : 
+#. By default, Django automatically creates a primary key field named id 
+
+
 
 class User(AbstractUser):
-    username = models.CharField(unique=True, max_length=100)
-    email = models.EmailField ( unique=True)
-    full_name = models.CharField(unique=True, max_length=100)
+    username = models.CharField(unique=True, max_length=100, blank=False, null=False)
+    email = models.EmailField(unique=True, blank=False, null=False)
+    full_name = models.CharField(max_length=100, blank=True, null=True)
     otp = models.CharField(max_length=100, null=True, blank=True) # can be empty(blank)
+    refresh_token = models.CharField(max_length=100 , null=True , blank=True)   
 
-
-    USERNAME_FIELD = 'email'  # unique identifier for authentication 
+    USERNAME_FIELD = 'email'  # unique identifier for authentication logging
+    
+    def save(self, *args, **kwargs):
+        if self.full_name == "":
+            self.full_name = self.username
+        super().save(*args, **kwargs)
 
     #The REQUIRED_FIELDS attribute is a list of fields that are required when creating a user 
     #  By default, Django requires the username field. Since you’re using email as the unique identifier, you'll need to include username 
-    # in REQUIRED_FIELDS so that it is still required when creating a user
+    # in REQUIRED_FIELDS so that it is still required when !creating a user!
     
     REQUIRED_FIELDS = ['username']  
 
@@ -21,13 +33,7 @@ class User(AbstractUser):
         return self.email
     
     """
-    def save(self, *args, **kwargs):
-        email_username, full_name = self.email.split("@")
-        if self.full_name == "" or self.full_name == None:
-            self.full_name == email_username
-        if self.username == "" or self.username == None:
-            self.username = email_username
-        super(User, self).save(*args, **kwargs)
+   
     """
     
   
@@ -45,8 +51,26 @@ class Profile(models.Model):
     about = models.TextField(null=True, blank=True)
     date = models.DateTimeField(auto_now_add=True) # date_created will be automatically set to the current date and time when a new instance of MyModel is created. This field will not change on subsequent updates to the model instance.
 
-    REQUIRED_FIELDS = [full_name]  
+    def save(self, *args, **kwargs):
+        if self.full_name == "" or self.full_name == None:
+            self.full_name == self.user.username
+        super().save(*args, **kwargs)
     
     def __str__(self):
             return str(self.full_name)
-   
+
+
+#The post_save signal in Django is triggered after a model's save() method is called, and the instance is successfully saved to the database.
+# This signal is often used to perform actions automatically after an object is created or updated, such as updating related models
+# , sending notifications, or logging changes.
+
+def create_user_profile(sender, instance, created, **kwargs): # sender = User 
+    if created:
+        Profile.objects.create(user=instance)
+"""
+def save_user_profile(sender, instance, **kwargs): 
+    instance.profile.save()   #When you have a OneToOneField, Django automatically creates a reverse relationship that allows you to access the related object from the other side of the relationship.
+"""
+
+post_save.connect(create_user_profile, sender=User) #signal should only be triggered for the User model only when creartion of USER
+#post_save.connect(save_user_profile, sender=User) #  hapends each time user instace saved(create and update)
