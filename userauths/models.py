@@ -1,27 +1,27 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.db.models.signals import post_save
-from django.forms import ValidationError
-
+from django.utils.text import slugify
 
 #note : 
 #. By default, Django automatically creates a primary key field named id 
 
 
-
-class User(AbstractUser):
+class User(AbstractUser):   
     username = models.CharField(unique=True, max_length=100, blank=False, null=False)
     email = models.EmailField(unique=True, blank=False, null=False)
     full_name = models.CharField(max_length=100, blank=True, null=True)
     otp = models.CharField(max_length=100, null=True, blank=True) # can be empty(blank)
     refresh_token = models.CharField(max_length=100 , null=True , blank=True)   
-
+    
     USERNAME_FIELD = 'email'  # unique identifier for authentication logging
     
     def save(self, *args, **kwargs):
         if self.full_name == "":
             self.full_name = self.username
         super().save(*args, **kwargs)
+        Profile.objects.get_or_create(user=self)  # creating a new profile 
+       
 
     #The REQUIRED_FIELDS attribute is a list of fields that are required when creating a user 
     #  By default, Django requires the username field. Since you’re using email as the unique identifier, you'll need to include username 
@@ -30,13 +30,9 @@ class User(AbstractUser):
     REQUIRED_FIELDS = ['username']  
 
     def __str__(self):
-        return self.email
+        return f'{self.pk} - {self.email}'
     
-    """
-   
-    """
     
-  
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     image = models.FileField(upload_to="user_folder", default="default-user.jpg", null=True, blank=True)
@@ -53,7 +49,7 @@ class Profile(models.Model):
 
     def save(self, *args, **kwargs):
         if self.full_name == "" or self.full_name == None:
-            self.full_name == self.user.username
+            self.full_name = self.user.username
         super().save(*args, **kwargs)
     
     def __str__(self):
@@ -64,13 +60,15 @@ class Profile(models.Model):
 # This signal is often used to perform actions automatically after an object is created or updated, such as updating related models
 # , sending notifications, or logging changes.
 
+"""
 def create_user_profile(sender, instance, created, **kwargs): # sender = User 
     if created:
         Profile.objects.create(user=instance)
-"""
-def save_user_profile(sender, instance, **kwargs): 
-    instance.profile.save()   #When you have a OneToOneField, Django automatically creates a reverse relationship that allows you to access the related object from the other side of the relationship.
-"""
+        
 
 post_save.connect(create_user_profile, sender=User) #signal should only be triggered for the User model only when creartion of USER
+"""
 #post_save.connect(save_user_profile, sender=User) #  hapends each time user instace saved(create and update)
+
+
+
